@@ -48,4 +48,9 @@ app.get("/metar", async (req, res) => {
     res.status(500).json({ error: "Erreur serveur METAR" });
   }
 });
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("Proxy running on port", PORT);
+});
+
 
