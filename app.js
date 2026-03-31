@@ -193,7 +193,7 @@ function computeCrosswind(runway, windDir, windSpeed) {
     };
 }
 
-function updateRunwayPanel(runway, windDir, windSpeed) {
+function updateRunwayPanel(runway, windDir, windSpeed, phase) {
     const panel = document.getElementById("runway-panel");
     if (!panel) return;
 
@@ -209,11 +209,10 @@ function updateRunwayPanel(runway, windDir, windSpeed) {
     panel.className = runway === "22" ? "runway-22" : "runway-04";
 
     panel.innerText =
-    `Piste ${runway} (${r.heading}°) – ` +
-    `${phase === "landing" ? "Atterrissage" : "Décollage"} – ` +
-    `${info.crosswind} kt crosswind (Δ${info.angleDiff}°) – ` +
-    `Vent ${windDir}°/${windSpeed} kt`;
-
+        `Piste ${runway} (${r.heading}°) – ` +
+        `${phase === "landing" ? "Atterrissage" : "Décollage"} – ` +
+        `${info.crosswind} kt crosswind (Δ${info.angleDiff}°) – ` +
+        `Vent ${windDir}°/${windSpeed} kt`;
 }
 
 // ======================================================
@@ -326,13 +325,7 @@ function updateMetarUI(data) {
     const windSpeed = data.wind_speed?.value;
     const runway = getRunwayFromWind(windDir);
     
-    updateSonometers(runway);
-    drawRunway(runway);
-    drawCorridor(runway);
-    panel.innerText =
-    `Piste ${runway} – Vent ${windDir}°/${windSpeed} kt`;
-
-}
+    // Déterminer la phase (décollage / atterrissage)
 let phase = "takeoff";
 
 if (runway === "22") {
@@ -343,7 +336,19 @@ if (runway === "04") {
     if (windDir >= 20 && windDir <= 80) phase = "landing";
 }
 
+// Mise à jour des sonomètres
 updateSonometersAdvanced(runway, phase);
+
+// Mise à jour du panneau piste active
+updateRunwayPanel(runway, windDir, windSpeed, phase);
+
+    updateSonometers(runway);
+    drawRunway(runway);
+    drawCorridor(runway);
+    panel.innerText =
+    `Piste ${runway} – Vent ${windDir}°/${windSpeed} kt`;
+
+}
 
 // ======================================================
 // TAF
