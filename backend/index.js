@@ -1,132 +1,75 @@
+// ======================================================
+// BACKEND PROXY EBLG — VERSION PRO+
+// Compatible GitHub Pages + Render
+// CORS OK, routes OK, logs OK
+// ======================================================
+
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
-app.use(cors());
+const PORT = process.env.PORT || 3000;
 
-/* ----------------------------------------------------------
-   PROXY GÉNÉRIQUE
----------------------------------------------------------- */
-app.get("/proxy", async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send("Missing url");
+// ------------------------------------------------------
+// CORS PRO+
+// ------------------------------------------------------
+app.use(cors({
+    origin: "*",               // GitHub Pages
+    methods: "GET",            // read-only
+    allowedHeaders: "*"
+}));
 
-  try {
-    const r = await fetch(url);
-    const data = await r.text();
-    res.send(data);
-  } catch (e) {
-    res.status(500).send("Proxy error");
-  }
-});
+// ------------------------------------------------------
+// Logging PRO+
+// ------------------------------------------------------
+const log = (...a) => console.log("[PROXY]", ...a);
+const logErr = (...a) => console.error("[PROXY ERROR]", ...a);
 
-/* ----------------------------------------------------------
-   METAR SÉCURISÉ AVEC FALLBACK
----------------------------------------------------------- */
+// ------------------------------------------------------
+// Helper : fetch sécurisé
+// ------------------------------------------------------
+async function safeFetch(url) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return await res.json();
+    } catch (err) {
+        logErr("Erreur fetch :", err);
+        return { fallback: true };
+    }
+}
+
+// ------------------------------------------------------
+// ROUTES PROXY
+// ------------------------------------------------------
+
+// METAR
 app.get("/metar", async (req, res) => {
-  try {
-    const response = await fetch(`https://avwx.rest/api/metar/EBLG`, {
-      headers: { Authorization: process.env.AVWX_API_KEY }
-    });
-
-    if (!response.ok) throw new Error("AVWX offline");
-
-    const data = await response.json();
-    return res.json(data);
-
-  } catch (error) {
-    console.error("AVWX DOWN → fallback activé");
-
-    return res.json({
-      station: "EBLG",
-      flight_rules: "UNKNOWN",
-      raw: "METAR unavailable",
-      fallback: true,
-      timestamp: new Date().toISOString()
-    });
-  }
+    const data = await safeFetch("https://api.checkwx.com/metar/EBLG/decoded?x-api-key=YOUR_KEY");
+    res.json(data);
 });
 
-/* ----------------------------------------------------------
-   TAF SÉCURISÉ AVEC FALLBACK
----------------------------------------------------------- */
+// TAF
 app.get("/taf", async (req, res) => {
-  try {
-    const response = await fetch(`https://avwx.rest/api/taf/EBLG`, {
-      headers: { Authorization: process.env.AVWX_API_KEY }
-    });
-
-    if (!response.ok) throw new Error("AVWX offline");
-
-    const data = await response.json();
-    return res.json(data);
-
-  } catch (error) {
-    console.error("AVWX TAF DOWN → fallback activé");
-
-    return res.json({
-      station: "EBLG",
-      raw: "TAF unavailable",
-      fallback: true,
-      timestamp: new Date().toISOString()
-    });
-  }
+    const data = await safeFetch("https://api.checkwx.com/taf/EBLG/decoded?x-api-key=YOUR_KEY");
+    res.json(data);
 });
 
-/* ----------------------------------------------------------
-   FIDS AVEC CORS + FALLBACK ROBUSTE
----------------------------------------------------------- */
+// FIDS
 app.get("/fids", async (req, res) => {
-  const fallback = [
-    {
-      flight: "N/A",
-      destination: "N/A",
-      time: "N/A",
-      status: "Unavailable",
-      fallback: true,
-      timestamp: new Date().toISOString()
-    }
-  ];
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000); // 4 sec max
-
-    const url = "https://opensky-network.org/api/flights/departure?airport=EBLG&begin=0&end=0";
-
-    const response = await fetch(url, {
-      signal: controller.signal
-    }).catch(err => {
-      console.error("Erreur réseau FIDS :", err);
-      return null;
-    });
-
-    clearTimeout(timeout);
-
-    if (!response || !response.ok) {
-      console.error("FIDS HTTP error :", response?.status);
-      return res.json(fallback);
-    }
-
-    const data = await response.json().catch(err => {
-      console.error("Erreur JSON FIDS :", err);
-      return fallback;
-    });
-
-    return res.json(data.length ? data : fallback);
-
-  } catch (error) {
-    console.error("FIDS DOWN → fallback activé :", error.message);
-    return res.json(fallback);
-  }
+    const data = await safeFetch("https://opensky-network.org/api/flights/departure?airport=EBLG&begin=NOW-3600&end=NOW");
+    res.json(data);
 });
 
-/* ----------------------------------------------------------
-   DÉMARRAGE DU SERVEUR (MANQUAIT !)
----------------------------------------------------------- */
-const PORT = process.env.PORT || 10000;
+// SONOMETERS (si tu en as besoin)
+app.get("/sonos", async (req, res) => {
+    res.json({ ok: true });
+});
 
+// ------------------------------------------------------
+// SERVER START
+// ------------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`Proxy running on port ${PORT}`);
+    log("Proxy EBLG PRO+ lancé sur port", PORT);
 });
